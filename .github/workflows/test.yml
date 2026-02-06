@@ -33,6 +33,7 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run main.py with test input
+        shell: bash # I cant find any way to use powershell
         run: | 
           cd src
           echo Get a free iPhone > input.txt
