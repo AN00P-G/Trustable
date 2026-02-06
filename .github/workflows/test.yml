@@ -8,7 +8,13 @@ on:
 
 jobs:
   build:
-    runs-on: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        # Define the operating systems
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
 
     steps:
       - name: Checkout repository
