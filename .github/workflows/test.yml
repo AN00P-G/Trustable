@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    timeout-minutes: 15
+    timeout-minutes: 5
     runs-on: ${{ matrix.os }}
     
     strategy:
@@ -32,7 +32,6 @@ jobs:
       - name: Install the project
         run: uv sync --locked --all-extras --dev
 
-      - name: Run main.py
-        run: python src/main.py |
-            echo "Get a free iPhone" > input.txt &&
-            python src/main.py < input.txt
+      - name: Run main.py with test input
+        run: echo "Get a free iPhone" | cd src && uv run main.py
+
