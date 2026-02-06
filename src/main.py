@@ -15,6 +15,7 @@ def main():
 
             print(f"\nSMS: {sample_sms[0]}")
             print(f"Predicted: {pred[0]}, Trust score: {1 - prob[0][1]:.2f}")
+            print("-" * 100)
 
 
 if __name__ == "__main__":
