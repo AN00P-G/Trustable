@@ -35,8 +35,6 @@ jobs:
       - name: Run main.py with test input
         run: | 
           cd src
-          uv run main.py <<EOF
-            Get a free iPhone
-            quit
-            EOF
+          echo "Get a free iPhone" | uv run main.py
+          echo "quit" | uv run main.py
 
