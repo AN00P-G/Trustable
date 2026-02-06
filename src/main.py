@@ -1,5 +1,5 @@
 """ Module main.py: Entry point for the Trustable SMS Spam Classifier application. """
-from model import pipeline
+from model import pipeline, explanation
 
 def main():
     print("-" * 100)
@@ -15,7 +15,8 @@ def main():
 
             print(f"\nSMS: {sample_sms[0]}")
             print(f"Predicted: {pred[0]}, Trust score: {1 - prob[0][1]:.2f}")
-            print("-" * 100)
+            explanation(sample_sms[0])
+            
 
 
 if __name__ == "__main__":
