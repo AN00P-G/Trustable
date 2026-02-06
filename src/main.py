@@ -3,8 +3,7 @@ from model import pipeline
 
 def main():
     print("-" * 100)
-    print("")
-    print("Hello from trustable!")
+    print("\nHello from trustable!")
     
     sample_sms = [str(input("Enter an SMS message to classify as spam or ham: "))]
     pred = pipeline.predict(sample_sms)
