@@ -33,5 +33,7 @@ jobs:
         run: uv sync --locked --all-extras --dev
 
       - name: Run main.py with test input
-        run: echo "Get a free iPhone" | cd src && uv run main.py
+        run: | 
+          cd src
+          echo "Get a free iPhone" | uv run main.py
 
