@@ -1,3 +1,6 @@
 .venv/
 *.cache
 __pycache__/
+Datasets/
+spam.csv
+my_extension/
