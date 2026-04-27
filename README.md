@@ -40,7 +40,7 @@ included in the repository and loads automatically on first run.
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/Trustable.git
+git clone https://github.com/AN00P-G/Trustable
 cd Trustable
 ```
 
