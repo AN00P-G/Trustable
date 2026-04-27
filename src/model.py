@@ -1,10 +1,10 @@
 """Model training, evaluation, and explanation helpers."""
 
+import hashlib
 from pathlib import Path
 
 import joblib
 import numpy as np
-from preprocess import DATA_PATH, X, y, x_train, x_test, y_train, y_test
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix
@@ -12,9 +12,33 @@ from sklearn.pipeline import Pipeline
 
 
 MODEL_PATH = Path(__file__).resolve().parent / "spam_pipeline.joblib"
+HASH_PATH = MODEL_PATH.with_suffix(".hash")
+DATA_PATH = Path(__file__).resolve().parent / "spam.csv"
+
+
+def _data_hash() -> str:
+    """MD5 hash of spam.csv — stable regardless of mtime."""
+    if not DATA_PATH.exists():
+        return ""
+    return hashlib.md5(DATA_PATH.read_bytes()).hexdigest()
+
+
+def _save_hash() -> None:
+    HASH_PATH.write_text(_data_hash(), encoding="utf-8")
+
+
+def _hash_changed() -> bool:
+    if not DATA_PATH.exists():
+        return False
+    if not HASH_PATH.exists():
+        return True
+    return HASH_PATH.read_text(encoding="utf-8").strip() != _data_hash()
 
 
 def _train_and_evaluate():
+    # Only import preprocess when we actually need to retrain.
+    from preprocess import x_train, x_test, y_train, y_test
+
     pipeline = Pipeline(
         [
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=3)),
@@ -34,6 +58,7 @@ def _train_and_evaluate():
     print("")
 
     joblib.dump(pipeline, MODEL_PATH)
+    _save_hash()
     print(f"Model trained and cached at {MODEL_PATH}")
 
     return pipeline
@@ -46,15 +71,14 @@ def _needs_retrain(pl):
 
 if MODEL_PATH.exists():
     loaded = joblib.load(MODEL_PATH)
-    data_mtime = DATA_PATH.stat().st_mtime if DATA_PATH.exists() else 0
-    model_mtime = MODEL_PATH.stat().st_mtime
-    if _needs_retrain(loaded) or model_mtime < data_mtime:
+    if _needs_retrain(loaded) or _hash_changed():
         print("Cached model out-of-date or classes wrong; retraining...")
         pipeline = _train_and_evaluate()
     else:
         pipeline = loaded
         print(f"Loaded cached model from {MODEL_PATH}")
 else:
+    print("No cached model found; training from scratch...")
     pipeline = _train_and_evaluate()
 
 
@@ -65,14 +89,11 @@ def _spam_prob(pipeline: Pipeline, texts: list[str]) -> np.ndarray:
     if "spam" in classes:
         idx = classes.index("spam")
         return probs[:, idx]
-    # Fallback: if binary and spam not labeled, assume class with higher mean prob is spam
     if probs.shape[1] == 2:
         return probs[:, 1]
-    # Multi-class fallback: pick class with name containing spam/junk
     for i, c in enumerate(classes):
         if isinstance(c, str) and "spam" in c.lower():
             return probs[:, i]
-    # Default to last column
     return probs[:, -1]
 
 
@@ -94,7 +115,7 @@ def explain(sample_sms: str, top_k: int = 5):
     top_features = []
     for idx in top_indices:
         if features[idx] == 0:
-            continue  # skip features that were not present in the sample
+            continue
         contrib = float(contributions[idx])
         top_features.append(
             {

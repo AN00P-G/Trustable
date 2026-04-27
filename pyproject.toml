@@ -1,7 +1,7 @@
 [project]
 name = "trustable"
 version = "0.1.0"
-description = "Add your description here"
+description = "Explainable ML browser extension for spam and trust classification"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

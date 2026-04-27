@@ -1,5 +1,5 @@
 .venv/
 *.cache
 __pycache__/
-Datasets/
-spam.csv
+src/Dataset/
+src/spam.csv
