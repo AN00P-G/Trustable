@@ -3,6 +3,18 @@ const statusTextEl = document.getElementById('status-text');
 const resultEl = document.getElementById('result');
 const rescanBtn = document.getElementById('rescan');
 
+// Animated network background
+let netCtl = null;
+(function initNetwork() {
+  const canvas = document.getElementById('net-bg');
+  if (canvas && window.TrustableNetwork) {
+    netCtl = window.TrustableNetwork.start(canvas, {
+      lineRGB: '148,163,184',
+      accentRGB: '107,114,128',
+    });
+  }
+})();
+
 function setStatus(text, state) {
   statusTextEl.textContent = text;
   statusEl.className = `status ${state || ''}`.trim();
@@ -70,9 +82,15 @@ function renderResult(data) {
       .join('');
 
     featuresHtml = `
-      <div class="features">
-        <div class="features-title">Top contributing features</div>
-        ${rows}
+      <div class="features" id="reasons">
+        <button class="features-toggle" id="reasons-toggle" type="button">
+          <span>Why this score (${data.top_features.length})</span>
+          <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="features-panel">
+          <div class="features-title">Top contributing features</div>
+          ${rows}
+        </div>
       </div>`;
   }
 
@@ -105,13 +123,23 @@ function renderResult(data) {
     const valueEl = document.getElementById('score-value');
     if (valueEl && Number.isFinite(score)) animateNumber(valueEl, 0, score, 900);
 
-    document.querySelectorAll('.feature-fill').forEach((el) => {
-      const pct = el.getAttribute('data-pct');
-      requestAnimationFrame(() => {
-        el.style.width = `${pct}%`;
+    const reasons = document.getElementById('reasons');
+    const toggle = document.getElementById('reasons-toggle');
+    if (toggle && reasons) {
+      toggle.addEventListener('click', () => {
+        const nowOpen = reasons.classList.toggle('open');
+        if (nowOpen) {
+          document.querySelectorAll('.feature-fill').forEach((el) => {
+            const pct = el.getAttribute('data-pct');
+            el.style.width = '0%';
+            requestAnimationFrame(() => (el.style.width = `${pct}%`));
+          });
+        }
       });
-    });
+    }
   });
+
+  if (netCtl) netCtl.setAccent(isBad ? '239,68,68' : '34,197,94');
 }
 
 function animateNumber(el, from, to, duration) {

@@ -51,11 +51,25 @@
 
     body {
       width: 320px;
+      position: relative;
+      z-index: 0;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       color: var(--text);
       background: linear-gradient(160deg, var(--bg), var(--bg-2));
       overflow: hidden;
     }
+
+    /* animated network background (sits behind all content) */
+    .net-bg {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -100;
+      pointer-events: none;
+      opacity: 0.85;
+    }
+    .header, .content { position: relative; z-index: 1; }
 
     .header {
       position: relative;
@@ -126,14 +140,7 @@
     }
     .status.loading .spinner { display: inline-block; }
 
-    .card {
-      background: var(--card);
-      border: 1px solid var(--card-border);
-      border-radius: 14px;
-      padding: 16px;
-      backdrop-filter: blur(6px);
-      animation: fadeSlideUp 0.4s ease both;
-    }
+    .card { animation: fadeSlideUp 0.4s ease both; }
 
     /* Circular score ring */
     .score-ring {
@@ -199,8 +206,31 @@
       margin-top: 1px;
     }
 
-    /* Features */
+    /* Features dropdown */
     .features { margin-top: 16px; }
+    .features-toggle {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border: 1px solid var(--card-border); border-radius: 12px;
+      background: var(--card); color: var(--text); cursor: pointer;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .features-toggle:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.22); }
+    .features-toggle .caret { width: 14px; height: 14px; flex: 0 0 auto; transition: transform 0.25s ease; color: var(--text-dim); }
+    .features.open .features-toggle .caret { transform: rotate(180deg); }
+    .features.open .features-toggle { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
+    .features-panel {
+      overflow: hidden; max-height: 0; opacity: 0;
+      border: 1px solid transparent; border-top: none;
+      transition: max-height 0.3s ease, opacity 0.25s ease, padding 0.25s ease;
+      padding: 0 12px;
+    }
+    .features.open .features-panel {
+      max-height: 460px; opacity: 1; padding: 12px;
+      border-color: var(--card-border);
+      border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
+      background: rgba(255,255,255,0.03);
+    }
     .features-title {
       font-size: 11px;
       color: var(--text-dim);
@@ -268,37 +298,25 @@
       padding: 8px 4px;
     }
 
-    /* Re-scan button */
-    .rescan {
-      margin-top: 14px;
-      width: 100%;
-      padding: 11px;
-      border: none;
-      border-radius: 12px;
-      font-size: 13px;
-      font-weight: 600;
-      color: white;
-      cursor: pointer;
-      background: linear-gradient(120deg, var(--accent), var(--accent-2));
-      background-size: 160% 160%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+    /* Inline re-scan icon (sits on the status line) */
+    .rescan-icon {
+      margin-left: auto; flex: 0 0 auto;
+      width: 22px; height: 22px; padding: 0;
+      border: none; border-radius: 7px;
+      background: rgba(255,255,255,0.08); color: var(--accent-2); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
     }
-    .rescan:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55);
-      filter: brightness(1.08);
-    }
-    .rescan:active { transform: translateY(0) scale(0.98); }
-    .rescan:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
-    .rescan svg { width: 15px; height: 15px; }
-    .rescan.spinning svg { animation: spin 0.7s linear infinite; }
+    .rescan-icon:hover { background: rgba(255,255,255,0.18); color: #fff; transform: rotate(-25deg); }
+    .rescan-icon:active { transform: scale(0.9); }
+    .rescan-icon:disabled { opacity: 0.5; cursor: default; }
+    .rescan-icon svg { width: 13px; height: 13px; }
+    .rescan-icon.spinning svg { animation: spin 0.7s linear infinite; }
   </style>
 </head>
 <body>
+  <canvas id="net-bg" class="net-bg"></canvas>
+
   <div class="header">
     <img src="icon.png" class="logo" alt="Trustable logo" />
     <h1 class="title">Trustable</h1>
@@ -310,19 +328,18 @@
       <span class="dot"></span>
       <span class="spinner"></span>
       <span id="status-text">Starting analysis…</span>
+      <button id="rescan" class="rescan-icon" type="button" title="Re-scan page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+      </button>
     </div>
 
     <div id="result"></div>
-
-    <button id="rescan" class="rescan" type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-        <polyline points="21 3 21 9 15 9" />
-      </svg>
-      <span>Re-scan page</span>
-    </button>
   </div>
 
+  <script src="network.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
