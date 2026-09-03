@@ -11,16 +11,18 @@ leaving your device.
 
 ## How It Works
 
-When you open the extension popup on any webpage, the content script scrapes
-up to 2,000 characters of visible text and sends it to a local Flask server.
-The server runs the text through a trained pipeline and returns:
+On any webpage, the content script scrapes up to 2,000 characters of visible
+text and sends it to a local Flask server. The server runs the text through a
+trained pipeline and returns:
 
 - **Prediction** — `spam` or `ham`
 - **Trust score** — a number from 0.0 (very suspicious) to 1.0 (very trustworthy), computed as `1 - P(spam)`
-- **Top contributing features** — the specific words and phrases that most influenced the prediction, labeled as spam-leaning or ham-leaning with numeric contribution scores
+- **Contributing features** — the specific words and phrases that most influenced the prediction, labeled as spam-leaning or ham-leaning with numeric contribution scores
 
-An inline banner also appears in the bottom-right corner of every page
-automatically when the extension is active.
+Results are shown in a **sticky widget**: a floating button that stays on
+every page (like Rakuten / Student Beans). Click it to expand a draggable
+panel with an animated trust-score ring, an animated network background, and a
+scrollable "Why this score" dropdown listing every contributing feature.
 
 ---
 
@@ -67,8 +69,8 @@ instantly. No dataset or training step required.
 3. Click **Load unpacked**
 4. Select the `my_extension/` folder from this repository
 
-The Trustable icon will appear in your toolbar. Click it on any page to
-classify that page's content.
+The Trustable icon will appear in your toolbar. The sticky widget also loads
+automatically on every page; click the toolbar icon to show/hide it.
 
 ---
 
@@ -78,14 +80,19 @@ classify that page's content.
 
 Once the extension is loaded and the server is running:
 
-- **Click the toolbar icon** on any page to open the popup. It will
-  automatically scrape and classify the page, showing the prediction, trust
-  score, and top contributing features.
-- **Inline banner** — the extension also injects a small banner in the
-  bottom-right corner of each page automatically after the page loads,
-  showing the prediction and trust score (green for ham, red for spam).
+- **Sticky widget** — a floating Trustable button appears in the bottom-right
+  corner of every page and automatically scrapes and classifies the page. A
+  colored badge on the button shows the verdict at a glance (green for ham,
+  red for spam).
+- **Click the button** to expand the panel with the trust-score ring and the
+  scrollable "Why this score" dropdown. Drag it anywhere; its position and
+  open/closed state are remembered.
+- **Settings gear** — next to the minimize button, choose to hide the widget
+  for 30 minutes, 2 hours, or the rest of the browser session.
+- **Toolbar icon** — click it to toggle the widget, or to bring it back after
+  hiding it.
 
-Example popup output:
+Example analysis output:
 
 ```
 Predicted: spam
@@ -211,9 +218,9 @@ Trustable/
 │   └── spam_pipeline.hash    # hash of training data for cache invalidation
 ├── my_extension/
 │   ├── manifest.json         # Chrome Manifest V3 config
-│   ├── content.js            # page scraping and inline banner
-│   ├── popup.html            # extension popup UI
-│   ├── popup.js              # popup logic and API calls
+│   ├── content.js            # page scraping + sticky widget UI
+│   ├── network.js            # animated network background (shared canvas)
+│   ├── background.js         # service worker: toolbar toggle + session storage
 │   └── icon.png              # extension icon
 ├── pyproject.toml            # Python project and dependency config
 └── uv.lock                   # locked dependency versions
@@ -246,8 +253,8 @@ correctly across all three platforms without any setup beyond `uv sync`.
 
 **Server not reachable from extension**
 
-Make sure `server.py` is running before opening the extension popup. The
-server must be started manually.
+Make sure `server.py` is running before using the extension. The server must
+be started manually.
 
 **Extension shows "Content script not ready"**
 

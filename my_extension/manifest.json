@@ -4,8 +4,11 @@
   "version": "1.0",
   "description": "Run the Trustable model on the current webpage.",
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_icon": "icon.png",
+    "default_title": "Toggle Trustable"
+  },
+  "background": {
+    "service_worker": "background.js"
   },
   "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": ["http://localhost:8000/*", "http://127.0.0.1:8000/*"],

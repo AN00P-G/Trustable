@@ -5,6 +5,7 @@
   const MAX_LEN = 2000;
   const MAX_LINES = 30;
   const STORAGE_KEY = "trustable_widget_state";
+  const SESSION_KEY = "trustable_hidden_session";
 
   const hasChrome =
     typeof chrome !== "undefined" && chrome?.runtime?.id ? true : false;
@@ -38,8 +39,9 @@
   // -------------------------------------------------------------------------
   // Persisted widget state (position + open/collapsed)
   // -------------------------------------------------------------------------
-  const defaultState = { open: false, right: 18, bottom: 18 };
+  const defaultState = { open: false, right: 18, bottom: 18, hiddenUntil: 0 };
   let state = { ...defaultState };
+  let autoShowTimer = null;
 
   function loadState() {
     return new Promise((resolve) => {
@@ -69,6 +71,90 @@
         /* ignore */
       }
     }
+  }
+
+  // ---- "Hide for this session" (browser session via chrome.storage.session,
+  //      falling back to per-tab sessionStorage) --------------------------------
+  function getSessionHidden() {
+    return new Promise((resolve) => {
+      try {
+        if (hasChrome && chrome.storage?.session) {
+          chrome.storage.session.get(SESSION_KEY, (r) => {
+            if (chrome.runtime.lastError) {
+              return resolve(fallbackSessionHidden());
+            }
+            resolve(!!r?.[SESSION_KEY]);
+          });
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+      resolve(fallbackSessionHidden());
+    });
+  }
+
+  function fallbackSessionHidden() {
+    try {
+      return !!sessionStorage.getItem(SESSION_KEY);
+    } catch {
+      return false;
+    }
+  }
+
+  function setSessionHidden(v) {
+    try {
+      if (hasChrome && chrome.storage?.session) {
+        chrome.storage.session.set({ [SESSION_KEY]: !!v });
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (v) sessionStorage.setItem(SESSION_KEY, "1");
+      else sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function isHidden() {
+    if (state.hiddenUntil && Date.now() < state.hiddenUntil) return true;
+    if (await getSessionHidden()) return true;
+    return false;
+  }
+
+  function hideForMs(ms) {
+    state.hiddenUntil = Date.now() + ms;
+    saveState();
+    applyHidden();
+    if (autoShowTimer) clearTimeout(autoShowTimer);
+    autoShowTimer = setTimeout(() => showWidget(), ms);
+  }
+
+  function hideForSession() {
+    setSessionHidden(true);
+    applyHidden();
+  }
+
+  function clearHide() {
+    state.hiddenUntil = 0;
+    saveState();
+    setSessionHidden(false);
+    if (autoShowTimer) {
+      clearTimeout(autoShowTimer);
+      autoShowTimer = null;
+    }
+  }
+
+  function applyHidden() {
+    if (els?.host) els.host.style.display = "none";
+    closeMenu();
+  }
+
+  function showWidget() {
+    buildWidget();
+    if (els?.host) els.host.style.display = "";
   }
 
   // -------------------------------------------------------------------------
@@ -200,6 +286,33 @@
       transition: background 0.15s ease;
     }
     .icon-btn:hover { background: rgba(255,255,255,0.18); }
+    .icon-btn svg { width: 14px; height: 14px; }
+    #tr-settings:hover svg { animation: tr-spin 3s linear infinite; }
+
+    /* ---- Settings menu ---- */
+    .menu {
+      position: absolute; top: 50px; right: 12px; width: 210px;
+      background: #17171a; border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; box-shadow: 0 14px 34px rgba(0,0,0,0.55);
+      padding: 6px; z-index: 6; display: none;
+    }
+    .menu.open { display: block; animation: tr-in 0.18s ease; }
+    .menu-title {
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.7px;
+      color: #9ca3af; padding: 6px 8px 4px;
+    }
+    .menu-item {
+      width: 100%; text-align: left; background: transparent; border: none;
+      color: #f4f4f5; font-size: 12px; padding: 8px; border-radius: 8px;
+      cursor: pointer; display: flex; align-items: center; gap: 8px;
+      font-family: inherit; transition: background 0.15s ease;
+    }
+    .menu-item:hover { background: rgba(255,255,255,0.08); }
+    .menu-item svg { width: 14px; height: 14px; flex: 0 0 auto; color: #9ca3af; }
+    .menu-hint {
+      font-size: 9px; color: #6b7280; padding: 6px 8px 4px; line-height: 1.3;
+      border-top: 1px solid rgba(255,255,255,0.07); margin-top: 4px;
+    }
 
     .panel-body { padding: 14px; }
 
@@ -332,7 +445,29 @@
             <div class="panel-title">Trustable</div>
             <div class="panel-sub">Content trust analysis</div>
           </div>
+          <button class="icon-btn" id="tr-settings" title="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
           <button class="icon-btn" id="tr-min" title="Minimize">&minus;</button>
+        </div>
+        <div class="menu" id="tr-menu">
+          <div class="menu-title">Hide widget</div>
+          <button class="menu-item" data-hide="1800000" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            Hide for 30 minutes
+          </button>
+          <button class="menu-item" data-hide="7200000" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            Hide for 2 hours
+          </button>
+          <button class="menu-item" data-hide="session" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            Hide for this session
+          </button>
+          <div class="menu-hint">Click the toolbar icon to bring it back.</div>
         </div>
         <div class="panel-body">
           <div class="status loading" id="tr-status">
@@ -364,6 +499,8 @@
       badge: shadow.getElementById("tr-badge"),
       drag: shadow.getElementById("tr-drag"),
       minBtn: shadow.getElementById("tr-min"),
+      settingsBtn: shadow.getElementById("tr-settings"),
+      menu: shadow.getElementById("tr-menu"),
       rescan: shadow.getElementById("tr-rescan"),
       status: shadow.getElementById("tr-status"),
       statusText: shadow.getElementById("tr-status-text"),
@@ -393,10 +530,33 @@
     els.minBtn.addEventListener("click", () => setPanelOpen(false));
     els.rescan.addEventListener("click", () => classifyAndDisplay());
 
+    // Settings menu
+    els.settingsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      els.menu.classList.toggle("open");
+    });
+    els.menu.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const item = e.target.closest(".menu-item");
+      if (!item) return;
+      const val = item.getAttribute("data-hide");
+      if (val === "session") hideForSession();
+      else hideForMs(Number(val));
+    });
+    // Close menu when clicking anywhere else (inside shadow or on the page).
+    shadow.addEventListener("click", (e) => {
+      if (!e.composedPath().includes(els.menu)) closeMenu();
+    });
+    document.addEventListener("click", closeMenu);
+
     enableDrag(els.fab);
     enableDrag(els.drag);
 
     return els;
+  }
+
+  function closeMenu() {
+    if (els?.menu) els.menu.classList.remove("open");
   }
 
   function applyPosition() {
@@ -689,8 +849,16 @@
         return true;
       }
       if (msg.action === "toggleWidget") {
-        buildWidget();
-        togglePanel();
+        // Bring the widget back (clears any active hide) and toggle the panel.
+        const wasHidden = els?.host?.style.display === "none" || !els;
+        clearHide();
+        showWidget();
+        if (wasHidden) {
+          setPanelOpen(true);
+          if (!lastData && !busy) classifyAndDisplay();
+        } else {
+          togglePanel();
+        }
         sendResponse({ ok: true });
         return;
       }
@@ -701,8 +869,24 @@
   // Boot
   // -------------------------------------------------------------------------
   function boot() {
-    loadState().then((s) => {
+    loadState().then(async (s) => {
       state = s;
+
+      // Respect an active "hide" choice — stay out of the way until it expires
+      // or the user clicks the toolbar icon.
+      if (await isHidden()) {
+        if (state.hiddenUntil && Date.now() < state.hiddenUntil) {
+          const remaining = state.hiddenUntil - Date.now();
+          autoShowTimer = setTimeout(() => {
+            clearHide();
+            showWidget();
+            setPanelOpen(false, false);
+            classifyAndDisplay();
+          }, remaining);
+        }
+        return;
+      }
+
       buildWidget();
       // Run analysis once so the badge reflects the page right away.
       setTimeout(() => classifyAndDisplay(), 500);
