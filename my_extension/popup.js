@@ -1,20 +1,147 @@
 const statusEl = document.getElementById('status');
+const statusTextEl = document.getElementById('status-text');
 const resultEl = document.getElementById('result');
+const rescanBtn = document.getElementById('rescan');
+
+function setStatus(text, state) {
+  statusTextEl.textContent = text;
+  statusEl.className = `status ${state || ''}`.trim();
+}
+
+function setBusy(busy) {
+  rescanBtn.disabled = busy;
+  rescanBtn.classList.toggle('spinning', busy);
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function showSkeleton() {
+  resultEl.innerHTML = `
+    <div class="card">
+      <div class="skeleton sk-lg"></div>
+      <div class="skeleton sk-line" style="width: 40%;"></div>
+      <div class="skeleton sk-line"></div>
+      <div class="skeleton sk-line" style="width: 80%;"></div>
+      <div class="skeleton sk-line" style="width: 60%;"></div>
+    </div>`;
+}
+
+function showMessage(msg) {
+  resultEl.innerHTML = `<div class="card"><div class="message">${escapeHtml(msg)}</div></div>`;
+}
+
+function renderResult(data) {
+  const prediction = String(data.prediction || 'unknown');
+  const isBad = prediction.toLowerCase() === 'spam';
+  const tone = isBad ? 'bad' : 'good';
+  const icon = isBad ? '\u26A0\uFE0F' : '\u2713';
+
+  const score = Number(data.trust_score);
+  const scorePct = Math.max(0, Math.min(100, Math.round(score * 100)));
+
+  let featuresHtml = '';
+  if (Array.isArray(data.top_features) && data.top_features.length) {
+    const maxContrib = Math.max(
+      ...data.top_features.map((f) => Math.abs(Number(f.contribution)) || 0),
+      1e-6,
+    );
+
+    const rows = data.top_features
+      .map((f, i) => {
+        const contrib = Number(f.contribution) || 0;
+        const pct = Math.max(4, Math.round((Math.abs(contrib) / maxContrib) * 100));
+        const dir = contrib >= 0 ? 'pos' : 'neg';
+        return `
+          <div class="feature" style="animation-delay:${0.1 + i * 0.07}s">
+            <div class="feature-head">
+              <span class="feature-name" title="${escapeHtml(f.feature)}">${escapeHtml(f.feature)}</span>
+              <span class="feature-tag">${escapeHtml(f.label)}</span>
+            </div>
+            <div class="feature-track">
+              <div class="feature-fill ${dir}" data-pct="${pct}"></div>
+            </div>
+          </div>`;
+      })
+      .join('');
+
+    featuresHtml = `
+      <div class="features">
+        <div class="features-title">Top contributing features</div>
+        ${rows}
+      </div>`;
+  }
+
+  const CIRCUMFERENCE = 339.292; // 2 * PI * r (r = 54)
+
+  resultEl.innerHTML = `
+    <div class="card">
+      <div class="score-ring">
+        <svg viewBox="0 0 120 120">
+          <circle class="ring-track" cx="60" cy="60" r="54"></circle>
+          <circle class="ring-progress ${tone}" id="ring-progress" cx="60" cy="60" r="54"></circle>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-score ${tone}" id="score-value">0.00</div>
+          <div class="ring-verdict ${tone}">${icon} ${escapeHtml(prediction)}</div>
+          <div class="ring-label">Trust score</div>
+        </div>
+      </div>
+
+      ${featuresHtml}
+    </div>`;
+
+  requestAnimationFrame(() => {
+    const ring = document.getElementById('ring-progress');
+    if (ring) {
+      const offset = CIRCUMFERENCE * (1 - scorePct / 100);
+      ring.style.strokeDashoffset = String(offset);
+    }
+
+    const valueEl = document.getElementById('score-value');
+    if (valueEl && Number.isFinite(score)) animateNumber(valueEl, 0, score, 900);
+
+    document.querySelectorAll('.feature-fill').forEach((el) => {
+      const pct = el.getAttribute('data-pct');
+      requestAnimationFrame(() => {
+        el.style.width = `${pct}%`;
+      });
+    });
+  });
+}
+
+function animateNumber(el, from, to, duration) {
+  const start = performance.now();
+  function frame(now) {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = (from + (to - from) * eased).toFixed(2);
+    if (t < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
 
 function classifyAndShow() {
-  statusEl.textContent = 'Scraping...';
-  resultEl.textContent = '(not yet classified)';
+  setBusy(true);
+  setStatus('Scraping page…', 'loading');
+  showSkeleton();
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (!tabs[0]) {
-      statusEl.textContent = 'No active tab';
+      setStatus('No active tab', 'error');
+      showMessage('Could not find an active tab to analyze.');
+      setBusy(false);
       return;
     }
 
     const tabId = tabs[0].id;
 
     const classify = (scraped) => {
-      statusEl.textContent = 'Classifying...';
+      setStatus('Classifying…', 'loading');
 
       const endpoints = [
         'http://127.0.0.1:8000/classify',
@@ -23,8 +150,9 @@ function classifyAndShow() {
 
       const tryFetch = (idx) => {
         if (idx >= endpoints.length) {
-          statusEl.textContent = 'Classify failed';
-          resultEl.textContent = 'Unable to reach classifier API';
+          setStatus('Classify failed', 'error');
+          showMessage('Unable to reach the classifier API. Make sure the local server is running on port 8000.');
+          setBusy(false);
           return;
         }
         const url = endpoints[idx];
@@ -41,29 +169,21 @@ function classifyAndShow() {
             return r.json();
           })
           .then((data) => {
-            statusEl.textContent = 'Done';
             if (!data || !data.prediction) {
-              resultEl.textContent = 'Unexpected response';
+              setStatus('Unexpected response', 'error');
+              showMessage('The classifier returned an unexpected response.');
+              setBusy(false);
               return;
             }
-            const lines = [];
-            lines.push(`Predicted: ${data.prediction}`);
-            lines.push(`Trust score: ${data.trust_score.toFixed(2)}`);
-
-            if (data.top_features && data.top_features.length) {
-              lines.push('', 'Top contributing features:');
-              data.top_features.forEach((f) => {
-                const contrib = Number(f.contribution).toFixed(4);
-                lines.push(`- '${f.feature}'  (${f.label})  contrib: ${contrib}`);
-              });
-            }
-
-            resultEl.textContent = lines.join('\n');
+            setStatus('Analysis complete', 'done');
+            renderResult(data);
+            setBusy(false);
           })
           .catch((err) => {
             if (idx === endpoints.length - 1) {
-              statusEl.textContent = 'Classify failed';
-              resultEl.textContent = err.message || 'Error';
+              setStatus('Classify failed', 'error');
+              showMessage(err.message || 'An error occurred while classifying.');
+              setBusy(false);
               return;
             }
             tryFetch(idx + 1);
@@ -76,14 +196,17 @@ function classifyAndShow() {
     const sendScrape = () => {
       chrome.tabs.sendMessage(tabId, { action: 'scrapePage' }, (response) => {
         if (chrome.runtime.lastError) {
-          statusEl.textContent = 'Content script not ready';
+          setStatus('Content script not ready', 'error');
+          showMessage('Could not read the page content. Try reloading the tab.');
+          setBusy(false);
           return;
         }
-        statusEl.textContent = 'Scraped text ready';
         const scraped = response?.text || '';
 
         if (!scraped) {
-          resultEl.textContent = 'No text to classify';
+          setStatus('No text found', 'error');
+          showMessage('No readable text was found on this page.');
+          setBusy(false);
           return;
         }
 
@@ -95,7 +218,9 @@ function classifyAndShow() {
       if (chrome.runtime.lastError) {
         chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }, () => {
           if (chrome.runtime.lastError) {
-            statusEl.textContent = 'Cannot inject content script';
+            setStatus('Cannot inject content script', 'error');
+            showMessage('This page does not allow the extension to run (e.g. browser system pages).');
+            setBusy(false);
             return;
           }
           sendScrape();
@@ -107,7 +232,8 @@ function classifyAndShow() {
   });
 }
 
-// Run automatically when popup opens
+rescanBtn.addEventListener('click', classifyAndShow);
+
 document.addEventListener('DOMContentLoaded', () => {
   classifyAndShow();
 });
