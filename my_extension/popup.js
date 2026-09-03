@@ -65,14 +65,21 @@ function renderResult(data) {
 
     const rows = data.top_features
       .map((f, i) => {
-        const contrib = Number(f.contribution) || 0;
+        // Display convention: positive = Ham (trust, green), negative = Spam (red).
+        // Server emits positive = Spam, so negate for display.
+        const contrib = -(Number(f.contribution) || 0);
         const pct = Math.max(4, Math.round((Math.abs(contrib) / maxContrib) * 100));
         const dir = contrib >= 0 ? 'pos' : 'neg';
+        const label = contrib >= 0 ? 'Ham' : 'Spam';
+        const val = `${contrib >= 0 ? '+' : '\u2212'}${Math.abs(contrib).toFixed(3)}`;
         return `
           <div class="feature" style="animation-delay:${0.1 + i * 0.07}s">
             <div class="feature-head">
               <span class="feature-name" title="${escapeHtml(f.feature)}">${escapeHtml(f.feature)}</span>
-              <span class="feature-tag">${escapeHtml(f.label)}</span>
+              <span class="feature-meta">
+                <span class="feature-val ${dir}">${val}</span>
+                <span class="feature-tag">${label}</span>
+              </span>
             </div>
             <div class="feature-track">
               <div class="feature-fill ${dir}" data-pct="${pct}"></div>
@@ -88,7 +95,7 @@ function renderResult(data) {
           <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="features-panel">
-          <div class="features-title">Top contributing features</div>
+          <div class="features-title">All contributing features</div>
           ${rows}
         </div>
       </div>`;

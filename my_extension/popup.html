@@ -226,11 +226,16 @@
       padding: 0 12px;
     }
     .features.open .features-panel {
-      max-height: 460px; opacity: 1; padding: 12px;
+      max-height: 240px; opacity: 1; padding: 12px;
+      overflow-y: auto; overscroll-behavior: contain;
       border-color: var(--card-border);
       border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
       background: rgba(255,255,255,0.03);
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
     }
+    .features-panel::-webkit-scrollbar { width: 8px; }
+    .features-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 8px; }
+    .features-panel::-webkit-scrollbar-track { background: transparent; }
     .features-title {
       font-size: 11px;
       color: var(--text-dim);
@@ -246,6 +251,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 8px;
       margin-bottom: 3px;
       font-size: 12px;
     }
@@ -255,8 +261,12 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 160px;
+      max-width: 130px;
     }
+    .feature-meta { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+    .feature-val { font-family: "Fira Code", "Consolas", monospace; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .feature-val.pos { color: var(--good); }
+    .feature-val.neg { color: var(--bad); }
     .feature-tag {
       font-size: 9px;
       padding: 2px 6px;

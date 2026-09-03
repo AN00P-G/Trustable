@@ -97,8 +97,13 @@ def _spam_prob(pipeline: Pipeline, texts: list[str]) -> np.ndarray:
     return probs[:, -1]
 
 
-def explain(sample_sms: str, top_k: int = 5):
-    """Return prediction, trust_score, and top contributing features for a message."""
+def explain(sample_sms: str, top_k: int | None = None):
+    """Return prediction, trust_score, and contributing features for a message.
+
+    By default (``top_k=None``) every contributing feature (i.e. every word/
+    bigram present in the text with a non-zero contribution) is returned,
+    sorted by absolute contribution. Pass an integer to cap the list.
+    """
     pred = pipeline.predict([sample_sms])[0]
     prob_spam = float(_spam_prob(pipeline, [sample_sms])[0])
     trust_score = 1 - prob_spam
@@ -111,12 +116,15 @@ def explain(sample_sms: str, top_k: int = 5):
 
     contributions = features * feature_importance
 
-    top_indices = np.argsort(np.abs(contributions))[-top_k:][::-1]
+    # All indices sorted by absolute contribution (largest first).
+    order = np.argsort(np.abs(contributions))[::-1]
     top_features = []
-    for idx in top_indices:
+    for idx in order:
         if features[idx] == 0:
-            continue
+            continue  # word not present in this text
         contrib = float(contributions[idx])
+        if contrib == 0:
+            continue
         top_features.append(
             {
                 "feature": feature_names[idx],
@@ -124,6 +132,8 @@ def explain(sample_sms: str, top_k: int = 5):
                 "label": "Spam" if contrib > 0 else "Ham",
             }
         )
+        if top_k is not None and len(top_features) >= top_k:
+            break
 
     return {
         "prediction": pred,

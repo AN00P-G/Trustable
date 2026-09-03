@@ -254,15 +254,24 @@
       padding: 0 12px;
     }
     .features.open .features-panel {
-      max-height: 460px; opacity: 1; padding: 12px;
+      max-height: 240px; opacity: 1; padding: 12px;
+      overflow-y: auto; overscroll-behavior: contain;
       border-color: rgba(255,255,255,0.12);
       border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;
       background: rgba(255,255,255,0.03);
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
     }
+    .features-panel::-webkit-scrollbar { width: 8px; }
+    .features-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 8px; }
+    .features-panel::-webkit-scrollbar-track { background: transparent; }
     .features-title { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
     .feature { margin-bottom: 9px; animation: tr-fade 0.4s ease both; }
-    .feature-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; font-size: 12px; }
-    .feature-name { font-family: "Fira Code", "Consolas", monospace; color: #f4f4f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+    .feature-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 3px; font-size: 12px; }
+    .feature-name { font-family: "Fira Code", "Consolas", monospace; color: #f4f4f5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+    .feature-meta { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+    .feature-val { font-family: "Fira Code", "Consolas", monospace; font-size: 11px; font-variant-numeric: tabular-nums; }
+    .feature-val.pos { color: #22c55e; }
+    .feature-val.neg { color: #ef4444; }
     .feature-tag { font-size: 9px; padding: 2px 6px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; background: rgba(255,255,255,0.08); }
     .feature-track { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
     .feature-fill { height: 100%; width: 0%; border-radius: 999px; transition: width 0.8s cubic-bezier(0.22,1,0.36,1); }
@@ -522,14 +531,21 @@
       );
       const rows = data.top_features
         .map((f, i) => {
-          const contrib = Number(f.contribution) || 0;
+          // Display convention: positive = Ham (trust, green), negative = Spam (red).
+          // Server emits positive = Spam, so negate for display.
+          const contrib = -(Number(f.contribution) || 0);
           const pct = Math.max(4, Math.round((Math.abs(contrib) / maxContrib) * 100));
           const dir = contrib >= 0 ? "pos" : "neg";
+          const label = contrib >= 0 ? "Ham" : "Spam";
+          const val = `${contrib >= 0 ? "+" : "\u2212"}${Math.abs(contrib).toFixed(3)}`;
           return `
             <div class="feature" style="animation-delay:${0.1 + i * 0.07}s">
               <div class="feature-head">
                 <span class="feature-name" title="${escapeHtml(f.feature)}">${escapeHtml(f.feature)}</span>
-                <span class="feature-tag">${escapeHtml(f.label)}</span>
+                <span class="feature-meta">
+                  <span class="feature-val ${dir}">${val}</span>
+                  <span class="feature-tag">${label}</span>
+                </span>
               </div>
               <div class="feature-track">
                 <div class="feature-fill ${dir}" data-pct="${pct}"></div>
@@ -544,7 +560,7 @@
             <svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="features-panel">
-            <div class="features-title">Top contributing features</div>
+            <div class="features-title">All contributing features</div>
             ${rows}
           </div>
         </div>`;
